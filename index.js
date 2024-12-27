@@ -263,8 +263,37 @@ function runServer() {
 
 function exit() { console.clear(); console.log(chalk.greenBright('Goodbye!')); process.exit() }
 
+function runCommand(command) {
+  try {
+    return execSync(command, { stdio: 'pipe', encoding: 'utf-8' }).trim()
+  } catch (error) {
+    console.error(`Error executing command: ${command}`)
+    console.error(error.message)
+    process.exit(1)
+  }
+}
+
+// Function to check for updates
+function checkForUpdates() {
+  console.log('Checking for updates...')
+
+  // Fetch latest changes from the remote repository
+  runCommand('git fetch origin')
+
+  // Compare local and remote branches
+  const localHash = runCommand('git rev-parse HEAD')
+  const remoteHash = runCommand('git rev-parse origin/master')
+
+  if (localHash !== remoteHash) {
+    return true
+  } else {
+    return false
+  }
+}
+
 function main(message) {
   title('A simple file hoster - created by ratwithaface')
+  if (checkForUpdates()) console.log('',chalk.bgRed('RatLocker needs an update! Run "npm run update" to update.'), '\n')
   if (message) console.log(message, '\n')
   let choices = [ 'Manage Files', 'Manage Upload Keys', 'Exit' ]
   if (!listening) choices.unshift('Run Server')
