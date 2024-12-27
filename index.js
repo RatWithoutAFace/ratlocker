@@ -9,7 +9,7 @@ const gradient = require('gradient-string')
 const multer = require('multer')
 const fs = require('fs')
 const path = require('path')
-const { execSync } = require('child_process')
+const { execSync, exec } = require('child_process')
 const inquirer = require('inquirer')
 
 // ------------------------
@@ -159,6 +159,7 @@ function updateNewFiles() {
   })
 }
 
+// Key manager menu
 function manageKeys() {
   title('Key Manager - RatLocker by ratwithaface')
 
@@ -234,9 +235,9 @@ function manageFiles() {
         // Open file explorer
         const filesPath = path.join(__dirname, 'storage', 'files')
         if (process.platform === 'win32') {
-          runCommand(`explorer.exe ${filesPath}`)
+          exec(`explorer.exe ${filesPath}`)
         } else if ( process.platform === 'darwin' ) {
-          runCommand(`open ${filesPath}`)
+          exec(`open ${filesPath}`)
         }
 
         // Prompt user to add files
@@ -371,5 +372,72 @@ function main(message) {
   })
 }
 
-// Run the main function
-JSON.parse(fs.readFileSync('keys.json')).length === 0 ? main(chalk.bgRed('No keys found. Please create one.')) : main()
+function setup() {
+  console.clear()
+  console.log(gradient.retro(figlet.textSync('SETUP', { font: 'Slant' })) + '\n', chalk.yellowBright('Welcome to RatLocker!'), '\n')
+  console.log(chalk.yellowBright(' This is the first time you are running RatLocker. \n Please enter the following details:', '\n'))
+  inquirer.prompt([{
+    type: 'input',
+    name: 'user',
+    message: 'Enter your username:',
+  }, {
+    type: 'input',
+    name: 'newKey',
+    message: 'Enter your new Authorization Key:',
+    default: crypto.randomUUID() // Generate a random UUID for authorization key
+  }, {
+    type: 'list',
+    name: 'addFiles',
+    message: 'Would you like to add any files now?',
+    choices: [ 'Yes', 'No' ]
+  }]).then((answers) => {
+    if (!fs.existsSync('storage')) fs.mkdirSync('storage')
+    if (!fs.existsSync('storage/files')) fs.mkdirSync('storage/files')
+    if (!fs.existsSync('storage/inventory.json')) fs.writeFileSync('storage/inventory.json', '[]', 'utf-8')
+    if (!fs.existsSync('keys.json')) fs.writeFileSync('keys.json', JSON.stringify([{
+      key: crypto.randomUUID(),
+      user: 'admin',
+      uses: -1
+    }, { 
+      key: answers.newKey,
+      user: answers.user,
+      uses: -1
+    }]), 'utf-8')
+
+    if (answers.addFiles === 'Yes') {
+      const filesPath = path.join(__dirname, 'storage', 'files')
+      if (process.platform === 'win32') {
+        exec(`explorer.exe ${filesPath}`)
+      } else if ( process.platform === 'darwin' ) {
+        exec(`open ${filesPath}`)
+      }
+
+      // Prompt user to add files
+      console.log(chalk.bgBlue('\n File explorer has been opened. Please add files to /storage/files.\n'))
+      setTimeout(() => {
+        inquirer.prompt([{
+          type: 'list',
+          name: 'finished',
+          message: 'Are you finished adding files? (Press ENTER when done)',
+          choices: [ 'Yes, I am finished.' ]
+        }]).then(() => {
+          // Update inventory
+          updateNewFiles()
+
+          console.log(chalk.green('Setup complete! Running main thread in 5 seconds...'))
+          setTimeout(() => {
+            main()
+          }, 5000);
+        })
+      }, 3000)
+    } else {
+      console.log(chalk.yellowBright('Setup complete! Running main thread in 5 seconds...'))
+      setTimeout(() => {
+        main()
+      }, 5000);
+    }
+  })
+}
+
+// Run main function/setup
+fs.existsSync('keys.json') ? main() : setup()
