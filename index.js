@@ -159,7 +159,7 @@ function updateNewFiles() {
   })
 }
 
-// Key manager menu
+// Key manager menu function
 function manageKeys() {
   title('Key Manager - RatLocker by ratwithaface')
 
