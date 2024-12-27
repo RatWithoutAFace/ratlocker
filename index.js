@@ -332,7 +332,7 @@ function main(message) {
     running = true
     if (checkForUpdates()) {
       title('A simple file hoster - created by ratwithaface')
-      console.log(chalk.bgRedBright('New updates found! '+chalk.red('Run `npm run update` to update.')))
+      console.log(`${chalk.bgRedBright('New updates found!')} ${chalk.red('Run "npm run update" to update.')}`)
     } else {
       title('A simple file hoster - created by ratwithaface')
     }
