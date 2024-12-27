@@ -1,0 +1,17 @@
+.table {
+  max-width: 60em;
+  margin: 0 auto
+}
+
+h1 {
+  text-align: center;
+  padding: 1em 0 1em 0
+}
+
+thead {
+  text-align: center;
+}
+
+tbody {
+  text-align: center;
+}

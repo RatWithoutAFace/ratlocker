@@ -1,0 +1,19 @@
+{
+  "name": "ratlocker",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "ratwithaface",
+  "license": "MIT",
+  "description": "",
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "express": "^4.21.2",
+    "figlet": "^1.8.0",
+    "gradient-string": "^2.0.2",
+    "inquirer": "^8.2.6",
+    "multer": "^1.4.5-lts.1"
+  }
+}
