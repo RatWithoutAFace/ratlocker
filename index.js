@@ -9,10 +9,8 @@ const gradient = require('gradient-string')
 const multer = require('multer')
 const fs = require('fs')
 const path = require('path')
-const { exec } = require('child_process')
+const { exec, execSync } = require('child_process')
 const inquirer = require('inquirer')
-const { fileURLToPath } = require('url')
-const { json } = require('stream/consumers')
 
 // ------------------------
 //      EXPRESS SERVER
