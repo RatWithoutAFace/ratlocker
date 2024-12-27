@@ -16,7 +16,7 @@ document.getElementById('uploadForm').addEventListener('submit', (event) => {
     method: 'POST',
     body: formData,
     headers: {
-      'upload-key': keyInput.value
+      'Authorization': keyInput.value
     }
   })
   .then(response => {

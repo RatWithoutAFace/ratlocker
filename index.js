@@ -9,7 +9,7 @@ const gradient = require('gradient-string')
 const multer = require('multer')
 const fs = require('fs')
 const path = require('path')
-const { exec, execSync } = require('child_process')
+const { execSync } = require('child_process')
 const inquirer = require('inquirer')
 
 // ------------------------
@@ -19,14 +19,15 @@ const inquirer = require('inquirer')
 const app = express()
 const port = 3000
 let listening = false
+let running = false
 
-// Middleware to validate upload key
-const validateUploadKey = (req, res, next) => {
+// Middleware to validate authorization key
+const validateAuthorization = (req, res, next) => {
   const keys = JSON.parse(fs.readFileSync('keys.json'))
-  const uploadKey = req.headers['upload-key']
+  const uploadKey = req.headers['Authorization']
   const index = keys.findIndex(key => key.key === uploadKey)
-  function validateUploadKeyUses(uses) { if (uses === -1) return true; else if (uses > 0) return true; else return false; }
-  if (index !== -1 && validateUploadKeyUses(keys[index].uses)) {
+  function validateAuthorizationUses(uses) { if (uses === -1) return true; else if (uses > 0) return true; else return false; }
+  if (index !== -1 && validateAuthorizationUses(keys[index].uses)) {
     if (keys[index].uses !== -1) {
       keys[index].uses -= 1
       fs.writeFileSync('keys.json', JSON.stringify(keys))
@@ -49,7 +50,7 @@ const storage = multer.diskStorage({
 })
 
 // Multer middleware
-const upload = multer({ storage, limits: { fileSize: 1024 * 1024 * 35 } })
+const upload = multer({ storage, limits: { fileSize: 1024 * 1024 * 35 } }) // Limit file size to 35MB
 
 // Root route
 app.get('/', (req, res) => {
@@ -71,13 +72,13 @@ app.get('/files', (req, res) => {
   res.json(files)
 })
 
-// Upload route, requires a valid upload key and accepts multiple files and returns a success message
-app.post('/upload', validateUploadKey, upload.array('files', 5), (req, res) => {
+// Upload route, requires a valid authorization key and accepts multiple files and returns a success message
+app.post('/upload', validateAuthorization, upload.array('files', 5), (req, res) => {
   req.files.forEach(file => {
     const keys = JSON.parse(fs.readFileSync('keys.json'))
     const data = {  
       'name': file.originalname,
-      'addedBy': keys.find(key => key.key === req.headers['upload-key']).user,
+      'addedBy': keys.find(key => key.key === req.headers['Authorization']).user,
       'downloads': []
     }
     fs.writeFileSync('storage/' + file.originalname + '.json', JSON.stringify(data))
@@ -104,22 +105,50 @@ app.get('/download', (req, res) => {
   res.download('storage/files/' + req.query.file)
 })
 
+app.get('/info', (req, res) => {
+  // Spoof Authorization header as query parameter
+  if (req.query.key) {
+    req.headers['Authorization'] = req.query.key
+  }
+  // Validate the key
+  validateAuthorization(req, res, () => {
+    const data = JSON.parse(fs.readFileSync('storage/' + req.query.file + '.json'))
+    data.downloadLink = `${req.hostname}/download?file=${req.query.file}`
+    res.json(data)
+  })
+})
+
 // -------------------------
 //     MENUS AND PROMPTS
 // -------------------------
 
+// Function to display title
 function title(text) {
   console.clear()
   console.log(gradient.fruit(figlet.textSync('RatLocker', { font: 'Slant' })) + '\n', chalk.redBright(text), '\n')
 }
 
+// Function to run shell commands
+function runCommand(command) {
+  try {
+    return execSync(command, { stdio: 'pipe', encoding: 'utf-8' }).trim()
+  } catch (error) {
+    console.error(`Error executing command: ${command}`)
+    console.error(error.message)
+    process.exit(1)
+  }
+}
+
 function updateNewFiles() {
+  // Load files and inventory
   const files = fs.readdirSync('storage/files')
   const inventory = JSON.parse(fs.readFileSync('storage/inventory.json'))
   files.forEach(file => {
     if (!inventory.includes(file)) {
+      // Add file to inventory
       inventory.push(file)
       fs.writeFileSync('storage/inventory.json', JSON.stringify(inventory))
+      // Add file data to storage
       const data = {
         name: file,
         addedBy: 'admin',
@@ -130,50 +159,57 @@ function updateNewFiles() {
   })
 }
 
-function manageUploadKeys() {
-  title('Upload Key Manager - RatLocker by ratwithaface')
+function manageKeys() {
+  title('Key Manager - RatLocker by ratwithaface')
+
+  // Display keys and information
   let keys = JSON.parse(fs.readFileSync('keys.json'))
   keys.forEach(key => {
-    console.log(chalk.yellowBright(`${key.key}`), chalk.greenBright(`${key.user}`), chalk.redBright(`${key.uses}`))
+    console.log(chalk.cyan(`${key.key}`), chalk.blueBright(`${key.user}`), chalk.blue(`${key.uses}`))
   })
+  console.log('\n')
+  // Prompt user to create or delete keys
   inquirer.prompt([{
     type: 'list',
     name: 'action',
     message: 'Select an action:',
-    choices: [ 'Create Upload Key', 'Delete Upload Key', 'Back' ]
+    choices: [ 'Create Key', 'Delete Key', 'Back' ]
   }]).then((answers) => {
     switch (answers.action) {
-      case 'Create Upload Key':
+      case 'Create Key':
+        // Prompt user for details to create a new authorization key
         inquirer.prompt([{
           type: 'input',
           name: 'key',
-          message: 'Enter the new upload key:',
-          default: crypto.randomUUID()
+          message: 'Enter the new Authorization Key:',
+          default: crypto.randomUUID() // Generate a random UUID for authorization key
         }, {
           type: 'input',
           name: 'user',
-          message: 'Enter the user associated with the new upload key:',
+          message: 'Enter the user associated with the new Authorization Key:',
         }, {
           type: 'number',
           name: 'uses',
-          message: 'Enter the number of uses for the new upload key (-1 for unlimited):',
+          message: 'Enter the number of uses for the new Authorization Key (-1 for unlimited):',
           default: -1
         }]).then((answers) => {
+          // Add new authorization key to keys.json
           keys.push(answers)
           fs.writeFileSync('keys.json', JSON.stringify(keys))
-          manageUploadKeys()
+          manageKeys()
         })
         break
-      case 'Delete Upload Key':
+      case 'Delete Key':
         inquirer.prompt([{
           type: 'list',
           name: 'key',
           message: 'Select a key to delete:',
           choices: keys.map(key => key.key)
         }]).then((answers) => {
+          // Delete authorization key from keys.json
           keys = keys.filter(key => key.key !== answers.key)
           fs.writeFileSync('keys.json', JSON.stringify(keys))
-          manageUploadKeys()
+          manageKeys()
         })
         break
       case 'Back':
@@ -183,6 +219,7 @@ function manageUploadKeys() {
   })
 }
 
+// File manager menu
 function manageFiles() {
   title('File Manager - RatLocker by ratwithaface')
   inquirer.prompt([{
@@ -193,20 +230,25 @@ function manageFiles() {
   }]).then((answers) => {
     switch (answers.action) {
       case 'Add Files':
+
+        // Open file explorer
         const filesPath = path.join(__dirname, 'storage', 'files')
         if (process.platform === 'win32') {
-          exec(`explorer.exe ${filesPath}`)
+          runCommand(`explorer.exe ${filesPath}`)
         } else if ( process.platform === 'darwin' ) {
-          exec(`open ${filesPath}`)
+          runCommand(`open ${filesPath}`)
         }
+
+        // Prompt user to add files
         console.log(chalk.bgBlue('\n File explorer has been opened. Please add files to /storage/files.\n'))
         setTimeout(() => {
           inquirer.prompt([{
             type: 'list',
             name: 'finished',
-            message: 'Are you finished adding files?',
+            message: 'Are you finished adding files? (Press ENTER when done)',
             choices: [ 'Yes, I am finished.' ]
-          }]).then((answers) => {
+          }]).then(() => {
+            // Update inventory
             updateNewFiles()
             manageFiles()
           })
@@ -214,6 +256,7 @@ function manageFiles() {
         break
       case 'Delete Files':
         function deleteFiles() {
+          // Collect file names
           const files = fs.readdirSync('storage/files')
           let choices = []
           files.forEach(file => {
@@ -223,6 +266,8 @@ function manageFiles() {
             })
           })
           choices.push('Back')
+          
+          // Prompt user to delete files
           inquirer.prompt([{
             type: 'list',
             name: 'file',
@@ -232,9 +277,11 @@ function manageFiles() {
             if ( answers.file === 'Back' ) {
               manageFiles()
             } else {
+              // Delete file from storage
               fs.unlinkSync('storage/files/' + answers.file)
               fs.unlinkSync('storage/' + answers.file + '.json')
 
+              // Update inventory
               const inventory = JSON.parse(fs.readFileSync('storage/inventory.json'))
               inventory.splice(inventory.indexOf(answers.file), 1)
               fs.writeFileSync('storage/inventory.json', JSON.stringify(inventory))
@@ -252,6 +299,7 @@ function manageFiles() {
   })
 }
 
+// Function to run the server
 function runServer() {
   listening = true
   app.listen(port, () => {
@@ -259,21 +307,9 @@ function runServer() {
   })
 }
 
-function exit() { console.clear(); console.log(chalk.greenBright('Goodbye!')); process.exit() }
-
-function runCommand(command) {
-  try {
-    return execSync(command, { stdio: 'pipe', encoding: 'utf-8' }).trim()
-  } catch (error) {
-    console.error(`Error executing command: ${command}`)
-    console.error(error.message)
-    process.exit(1)
-  }
-}
-
 // Function to check for updates
 function checkForUpdates() {
-  console.log('Checking for updates...')
+  console.log(chalk.yellow('Checking for updates...'))
 
   // Fetch latest changes from the remote repository
   runCommand('git fetch origin')
@@ -282,6 +318,7 @@ function checkForUpdates() {
   const localHash = runCommand('git rev-parse HEAD')
   const remoteHash = runCommand('git rev-parse origin/master')
 
+  // If local and remote hashes are different, return true
   if (localHash !== remoteHash) {
     return true
   } else {
@@ -290,10 +327,24 @@ function checkForUpdates() {
 }
 
 function main(message) {
-  title('A simple file hoster - created by ratwithaface')
-  if (checkForUpdates()) console.log('',chalk.bgRed('RatLocker needs an update! Run "npm run update" to update.'), '\n')
+  // Check for updates if first time running main()
+  if (!running) {
+    running = true
+    if (checkForUpdates()) {
+      title('A simple file hoster - created by ratwithaface')
+      console.log(chalk.bgRedBright('New updates found! '+chalk.red('Run `npm run update` to update.')))
+    } else {
+      title('A simple file hoster - created by ratwithaface')
+    }
+  } else {
+    title('A simple file hoster - created by ratwithaface')
+  }
+
+  // Display message if provided
   if (message) console.log(message, '\n')
-  let choices = [ 'Manage Files', 'Manage Upload Keys', 'Exit' ]
+  
+  // Display options
+  let choices = [ 'Manage Files', 'Manage Keys', 'Exit' ]
   if (!listening) choices.unshift('Run Server')
   inquirer.prompt([
     {
@@ -304,14 +355,14 @@ function main(message) {
     }
   ]).then((answers) => {
     switch (answers.action) {
-      case 'Manage Upload Keys':
-        manageUploadKeys()
+      case 'Manage Keys':
+        manageKeys()
         break
       case 'Manage Files':
         manageFiles()
         break
       case 'Exit':
-        exit()
+        process.exit(0)
         break
       case 'Run Server':
         runServer()
@@ -320,4 +371,5 @@ function main(message) {
   })
 }
 
-JSON.parse(fs.readFileSync('keys.json')).length === 0 ? main(chalk.bgRed('No upload keys found. Please create one.')) : main()
+// Run the main function
+JSON.parse(fs.readFileSync('keys.json')).length === 0 ? main(chalk.bgRed('No keys found. Please create one.')) : main()
