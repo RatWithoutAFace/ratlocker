@@ -5,7 +5,7 @@ const gradient = require('gradient-string')
 
 function title(text) {
   console.clear()
-  console.log(gradient.fruit(figlet.textSync('RatLocker', { font: 'Slant' })) + '\n', chalk.redBright(text), '\n')
+  console.log(gradient.fruit(figlet.textSync('RatLocker', { font: 'Slant' })) + '\n', chalk.redBright(text))
 }
 
 // Function to run shell commands
